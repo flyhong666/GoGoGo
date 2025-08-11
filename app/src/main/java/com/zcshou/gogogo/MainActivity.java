@@ -21,11 +21,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.provider.Settings;
-import android.text.Editable;
-import android.text.SpannableStringBuilder;
 import android.text.TextUtils;
-import android.text.TextWatcher;
-import android.text.method.LinkMovementMethod;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -34,8 +30,6 @@ import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
-import android.widget.CheckBox;
-import android.widget.DatePicker;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
@@ -59,6 +53,7 @@ import com.baidu.location.BDAbstractLocationListener;
 import com.baidu.location.BDLocation;
 import com.baidu.location.LocationClient;
 import com.baidu.location.LocationClientOption;
+import com.baidu.mapapi.SDKInitializer;
 import com.baidu.mapapi.map.BaiduMap;
 import com.baidu.mapapi.map.BitmapDescriptor;
 import com.baidu.mapapi.map.BitmapDescriptorFactory;
@@ -126,10 +121,6 @@ public class MainActivity extends BaseActivity implements SensorEventListener {
     private OkHttpClient mOkHttpClient;
     private SharedPreferences sharedPreferences;
 
-    /*============================== NavigationView 相关 ==============================*/
-    private NavigationView mNavigationView;
-    private CheckBox mPtlCheckBox;
-    private final JSONObject mReg = new JSONObject();
     /*============================== 主界面地图 相关 ==============================*/
     /************** 地图 *****************/
     public final static BitmapDescriptor mMapIndicator = BitmapDescriptorFactory.fromResource(R.drawable.icon_gcoding);
@@ -416,7 +407,8 @@ public class MainActivity extends BaseActivity implements SensorEventListener {
 
     /*============================== NavigationView 相关 ==============================*/
     private void initNavigationView() {
-        mNavigationView = findViewById(R.id.nav_view);
+        /*============================== NavigationView 相关 ==============================*/
+        NavigationView mNavigationView = findViewById(R.id.nav_view);
         mNavigationView.setNavigationItemSelectedListener(item -> {
             int id = item.getItemId();
 
@@ -428,11 +420,15 @@ public class MainActivity extends BaseActivity implements SensorEventListener {
                 Intent intent = new Intent(MainActivity.this, SettingsActivity.class);
                 startActivity(intent);
             } else if (id == R.id.nav_dev) {
-                try {
-                    Intent intent = new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS);
-                    startActivity(intent);
-                } catch (Exception e) {
+                if (!GoUtils.isDeveloperOptionsEnabled(this)) {
                     GoUtils.DisplayToast(this, getResources().getString(R.string.app_error_dev));
+                } else {
+                    try {
+                        Intent intent = new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS);
+                        startActivity(intent);
+                    } catch (Exception e) {
+                        GoUtils.DisplayToast(this, getResources().getString(R.string.app_error_dev));
+                    }
                 }
             } else if (id == R.id.nav_update) {
                 checkUpdateVersion(true);
@@ -450,162 +446,19 @@ public class MainActivity extends BaseActivity implements SensorEventListener {
 
             return true;
         });
-        initUserInfo();
-    }
 
-    private void initUserInfo() {
-        View navHeaderView = mNavigationView.getHeaderView(0);
-
-        TextView mUserName = navHeaderView.findViewById(R.id.user_name);
-//        TextView mUserLimitInfo = navHeaderView.findViewById(R.id.user_limit);
-        ImageView mUserIcon = navHeaderView.findViewById(R.id.user_icon);
-
-        if (sharedPreferences.getString("setting_reg_code", null) != null) {
-            mUserName.setText(getResources().getString(R.string.app_author));
-        } else {
-            mUserIcon.setOnClickListener(v -> {
-                DrawerLayout drawer = findViewById(R.id.drawer_layout);
-
-                if (drawer.isDrawerOpen(GravityCompat.START)) {
-                    drawer.closeDrawer(GravityCompat.START);
-                }
-                Uri uri = Uri.parse("https://gitee.com/itexp/gogogo");
-                Intent intent = new Intent(Intent.ACTION_VIEW, uri);
-                startActivity(intent);
-            });
-
-            mUserName.setOnClickListener(v -> {
-                DrawerLayout drawer = findViewById(R.id.drawer_layout);
-
-                if (drawer.isDrawerOpen(GravityCompat.START)) {
-                    drawer.closeDrawer(GravityCompat.START);
-                }
-                showRegisterDialog();
-            });
-        }
-    }
-
-    public void showRegisterDialog() {
-        final android.app.AlertDialog alertDialog = new android.app.AlertDialog.Builder(this).create();
-        alertDialog.show();
-        alertDialog.setCancelable(false);
-        Window window = alertDialog.getWindow();
-        if (window != null) {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM);
-            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
-            window.setContentView(R.layout.register);
-            window.setGravity(Gravity.CENTER);
-            window.setWindowAnimations(R.style.DialogAnimFadeInFadeOut);
-
-            final TextView mRegReq = window.findViewById(R.id.reg_request);
-            final TextView regResp = window.findViewById(R.id.reg_response);
-
-            final TextView regUserName = window.findViewById(R.id.reg_user_name);
-            regUserName.addTextChangedListener(new TextWatcher() {
-                @Override
-                public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-
-                }
-
-                @Override
-                public void onTextChanged(CharSequence s, int start, int before, int count) {
-                    if (s.length() >= 3) {
-                        try {
-                            mReg.put("UserName", s.toString());
-                            mRegReq.setText(mReg.toString());
-                        } catch (JSONException e) {
-                            XLog.e("ERROR: username");
-                        }
-                    }
-                }
-
-                @Override
-                public void afterTextChanged(Editable s) {
-
-                }
-            });
-
-            DatePicker mDatePicker = window.findViewById(R.id.date_picker);
-            mDatePicker.setOnDateChangedListener((view, year, monthOfYear, dayOfMonth) -> {
-                try {
-                    mReg.put("DateTime", 1111);
-                    mRegReq.setText(mReg.toString());
-                } catch (JSONException e) {
-                    XLog.e("ERROR: DateTime");
-                }
-            });
-
-            mPtlCheckBox = window.findViewById(R.id.reg_check);
-            mPtlCheckBox.setOnClickListener(v -> {
-                if (mPtlCheckBox.isChecked()) {
-                    showProtocolDialog();
-                }
-            });
-
-            TextView regCancel = window.findViewById(R.id.reg_cancel);
-            regCancel.setOnClickListener(v -> alertDialog.cancel());
-
-            TextView regAgree = window.findViewById(R.id.reg_agree);
-            regAgree.setOnClickListener(v -> {
-                if (!mPtlCheckBox.isChecked()) {
-                    GoUtils.DisplayToast(this, getResources().getString(R.string.app_error_protocol));
-                    return;
-                }
-                if (TextUtils.isEmpty(regUserName.getText())) {
-                    GoUtils.DisplayToast(this,  getResources().getString(R.string.app_error_username));
-                    return;
-                }
-                if (TextUtils.isEmpty(regResp.getText())) {
-                    GoUtils.DisplayToast(this, getResources().getString(R.string.app_error_code));
-                    return;
-                }
-                try {
-                    mReg.put("RegReq", mReg.toString());
-                    mReg.put("ReqResp", regResp.toString());
-
-                } catch (JSONException e) {
-                    XLog.e("ERROR: reg req");
-                }
-
-                alertDialog.cancel();
-            });
-        }
-    }
-
-    private void showProtocolDialog() {
-        final android.app.AlertDialog alertDialog = new android.app.AlertDialog.Builder(this).create();
-        alertDialog.show();
-        alertDialog.setCancelable(false);
-        Window window = alertDialog.getWindow();
-        if (window != null) {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);      // 防止出现闪屏
-            window.setContentView(R.layout.user_agreement);
-            window.setGravity(Gravity.CENTER);
-            window.setWindowAnimations(R.style.DialogAnimFadeInFadeOut);
-
-            TextView tvContent = window.findViewById(R.id.tv_content);
-            Button tvCancel = window.findViewById(R.id.tv_cancel);
-            Button tvAgree = window.findViewById(R.id.tv_agree);
-            SpannableStringBuilder ssb = new SpannableStringBuilder();
-            ssb.append(getResources().getString(R.string.app_agreement));
-
-            tvContent.setMovementMethod(LinkMovementMethod.getInstance());
-            tvContent.setText(ssb, TextView.BufferType.SPANNABLE);
-
-            tvCancel.setOnClickListener(v -> {
-                mPtlCheckBox.setChecked(false);
-                alertDialog.cancel();
-            });
-
-            tvAgree.setOnClickListener(v -> {
-                mPtlCheckBox.setChecked(true);
-                alertDialog.cancel();
-            });
-        }
+        // 直接获取第 0 个头部视图
+        View headerView = mNavigationView.getHeaderView(0);
+        TextView app_version = headerView.findViewById(R.id.app_version);
+        app_version.setText(GoUtils.getVersionName(this));
     }
 
     /*============================== 主界面地图 相关 ==============================*/
     private void initMap() {
+        // 从参数区取地图key
+        String key = sharedPreferences.getString("setting_map_key", getResources().getString(R.string.setting_map_key_default));
+        SDKInitializer.setApiKey(key);
+        SDKInitializer.initialize(getApplicationContext());
         // 地图初始化
         mMapView = findViewById(R.id.bdMapView);
         mMapView.showZoomControls(false);
@@ -623,9 +476,6 @@ public class MainActivity extends BaseActivity implements SensorEventListener {
             public void onMapClick(LatLng point) {
                 mMarkLatLngMap = point;
                 markMap();
-
-                //百度坐标系转wgs坐标系
-                // transformCoordinate(String.valueOf(point.longitude), String.valueOf(point.latitude));
             }
             /**
              * 单击地图中的POI点
@@ -634,8 +484,6 @@ public class MainActivity extends BaseActivity implements SensorEventListener {
             public void onMapPoiClick(MapPoi poi) {
                 mMarkLatLngMap = poi.getPosition();
                 markMap();
-                //百度坐标系转wgs坐标系
-                // transformCoordinate(String.valueOf(poi.getPosition().longitude), String.valueOf(poi.getPosition().latitude));
             }
         });
         mBaiduMap.setOnMapLongClickListener(new BaiduMap.OnMapLongClickListener() {
@@ -647,8 +495,6 @@ public class MainActivity extends BaseActivity implements SensorEventListener {
                 mMarkLatLngMap = point;
                 markMap();
                 mGeoCoder.reverseGeoCode(new ReverseGeoCodeOption().location(point));
-                //百度坐标系转wgs坐标系
-                // transformCoordinate(String.valueOf(point.longitude), String.valueOf(point.latitude));
             }
         });
         mBaiduMap.setOnMapDoubleClickListener(new BaiduMap.OnMapDoubleClickListener() {
@@ -918,74 +764,6 @@ public class MainActivity extends BaseActivity implements SensorEventListener {
         mBaiduMap.animateMapStatus(MapStatusUpdateFactory.newMapStatus(builder.build()));
     }
 
-//    //坐标转换
-//    private void transformCoordinate(final String longitude, final String latitude) {
-//        final double error = 0.00000001;
-//        final String safeCode = getResources().getString(R.string.safecode);
-//        final String ak = getResources().getString(R.string.ak);
-//        String mapApiUrl = "https://api.map.baidu.com/geoconv/v1/?coords=" + longitude + "," + latitude +
-//                "&from=5&to=3&ak=" + ak + "&mcode=" + safeCode;
-//
-//        okhttp3.Request request = new okhttp3.Request.Builder().url(mapApiUrl).get().build();
-//        final Call call = mOkHttpClient.newCall(request);
-//        call.enqueue(new Callback() {
-//            @Override
-//            public void onFailure(@NonNull Call call, @NonNull IOException e) {
-//                XLog.e("ERROR: HTTP GET FAILED");
-//                //http 请求失败 离线转换坐标系
-//                double[] latLng = MapUtils.bd2wgs(Double.parseDouble(longitude), Double.parseDouble(latitude));
-//                mCurLng = latLng[0];
-//                mCurLat = latLng[1];
-//            }
-//
-//            @Override
-//            public void onResponse(@NonNull Call call, @NonNull okhttp3.Response response) throws IOException {
-//                ResponseBody responseBody = response.body();
-//                if (responseBody != null) {
-//                    String resp = responseBody.string();
-//                    try {
-//                        JSONObject getRetJson = new JSONObject(resp);
-//                        if (Integer.parseInt(getRetJson.getString("status")) == 0) {
-//                            JSONArray coordinateArr = getRetJson.getJSONArray("result");
-//                            JSONObject coordinate = coordinateArr.getJSONObject(0);
-//                            String gcj02Longitude = coordinate.getString("x");
-//                            String gcj02Latitude = coordinate.getString("y");
-//                            BigDecimal bigDecimalGcj02Longitude = BigDecimal.valueOf(Double.parseDouble(gcj02Longitude));
-//                            BigDecimal bigDecimalGcj02Latitude = BigDecimal.valueOf(Double.parseDouble(gcj02Latitude));
-//                            BigDecimal bigDecimalBd09Longitude = BigDecimal.valueOf(Double.parseDouble(longitude));
-//                            BigDecimal bigDecimalBd09Latitude = BigDecimal.valueOf(Double.parseDouble(latitude));
-//                            double gcj02LongitudeDouble = bigDecimalGcj02Longitude.setScale(9, RoundingMode.HALF_UP).doubleValue();
-//                            double gcj02LatitudeDouble = bigDecimalGcj02Latitude.setScale(9, RoundingMode.HALF_UP).doubleValue();
-//                            double bd09LongitudeDouble = bigDecimalBd09Longitude.setScale(9, RoundingMode.HALF_UP).doubleValue();
-//                            double bd09LatitudeDouble = bigDecimalBd09Latitude.setScale(9, RoundingMode.HALF_UP).doubleValue();
-//
-//                            //如果bd09转gcj02 结果误差很小  认为该坐标在国外
-//                            if ((Math.abs(gcj02LongitudeDouble - bd09LongitudeDouble)) <= error && (Math.abs(gcj02LatitudeDouble - bd09LatitudeDouble)) <= error) {
-//                                mCurLat = Double.parseDouble(latitude);
-//                                mCurLng = Double.parseDouble(longitude);
-//                            } else {
-//                                double[] latLng = MapUtils.gcj02towgs84(Double.parseDouble(gcj02Longitude), Double.parseDouble(gcj02Latitude));
-//                                mCurLng = latLng[0];
-//                                mCurLat = latLng[1];
-//                            }
-//                        } else {
-//                            XLog.e("ERROR:http get ");
-//                            double[] latLng = MapUtils.bd2wgs(Double.parseDouble(longitude), Double.parseDouble(latitude));
-//                            mCurLng = latLng[0];
-//                            mCurLat = latLng[1];
-//                        }
-//                    } catch (JSONException e) {
-//                        XLog.e("ERROR: resolve json");
-//                        e.printStackTrace();
-//                        double[] latLng = MapUtils.bd2wgs(Double.parseDouble(longitude), Double.parseDouble(latitude));
-//                        mCurLng = latLng[0];
-//                        mCurLat = latLng[1];
-//                    }
-//                }
-//            }
-//        });
-//    }
-
     // 在地图上显示位置
     public static boolean showLocation(String name, String bd09Longitude, String bd09Latitude) {
         boolean ret = true;
@@ -1145,7 +923,7 @@ public class MainActivity extends BaseActivity implements SensorEventListener {
     private void recordCurrentLocation(double lng, double lat) {
         //参数坐标系：bd09
         final String safeCode = getResources().getString(R.string.safecode);
-        final String ak = getResources().getString(R.string.ak);
+        final String ak = sharedPreferences.getString("setting_map_key", getResources().getString(R.string.setting_map_key_default));
         double[] latLng = MapUtils.bd2wgs(lng, lat);
         //bd09坐标的位置信息
         String mapApiUrl = "https://api.map.baidu.com/reverse_geocoding/v3/?ak=" + ak + "&output=json&coordtype=bd09ll" + "&location=" + lat + "," + lng + "&mcode=" + safeCode;
@@ -1231,7 +1009,6 @@ public class MainActivity extends BaseActivity implements SensorEventListener {
 
             markMap();
 
-            // transformCoordinate(lng, lat);
             double[] latLng = MapUtils.bd2wgs(mMarkLatLngMap.longitude, mMarkLatLngMap.latitude);
 
             // mSearchList.setVisibility(View.GONE);
@@ -1268,7 +1045,6 @@ public class MainActivity extends BaseActivity implements SensorEventListener {
 
                 markMap();
 
-                // transformCoordinate(lng, lat);
                 double[] latLng = MapUtils.bd2wgs(mMarkLatLngMap.longitude, mMarkLatLngMap.latitude);
 
                 //设置列表不可见
